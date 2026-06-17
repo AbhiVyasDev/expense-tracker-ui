@@ -15,8 +15,15 @@ function formatAmount(amount) {
   return new Intl.NumberFormat("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount);
 }
 
-function getMonthIndex(monthName) {
-  return MONTHS.findIndex(m => m === monthName?.toUpperCase());
+function getMonthIndex(month) {
+
+  if (typeof month === "number") {
+    return month - 1;
+  }
+
+  return MONTHS.findIndex(
+    m => m === String(month).toUpperCase()
+  );
 }
 
 const inputBase = {
@@ -415,7 +422,14 @@ export default function Budgets() {
                     onBlur={e => e.target.style.borderColor = "#E2E8F0"}
                   >
                     <option value="">Select month</option>
-                    {MONTHS.map(m => <option key={m} value={m}>{m.charAt(0) + m.slice(1).toLowerCase()}</option>)}
+                    {MONTHS.map((m, index) => (
+  <option
+    key={m}
+    value={index + 1}
+  >
+    {m.charAt(0) + m.slice(1).toLowerCase()}
+  </option>
+))}
                   </select>
                 </div>
                 <div>
