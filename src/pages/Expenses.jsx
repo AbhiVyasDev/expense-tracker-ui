@@ -14,6 +14,32 @@ const METHOD_STYLES = {
   OTHER:        { bg: "#F8FAFC", text: "#475569", label: "💰 Other" },
 };
 
+// NEW: category -> badge style + icon. "OTHER"/unknown values fall back to DEFAULT.
+const CATEGORY_STYLES = {
+  FOOD:         { bg: "#FEF3C7", text: "#92400E", icon: "🍔" },
+  ELECTRICITY:  { bg: "#FEF9C3", text: "#854D0E", icon: "⚡" },
+  TRAVEL:       { bg: "#E0F2FE", text: "#0369A1", icon: "✈️" },
+  TRANSPORT:    { bg: "#E0F2FE", text: "#0369A1", icon: "🚌" },
+  EDUCATION:    { bg: "#EDE9FE", text: "#6D28D9", icon: "🎓" },
+  HEALTH:       { bg: "#FEE2E2", text: "#B91C1C", icon: "🩺" },
+  MEDICAL:      { bg: "#FEE2E2", text: "#B91C1C", icon: "🩺" },
+  SHOPPING:     { bg: "#FCE7F3", text: "#BE185D", icon: "🛍️" },
+  RENT:         { bg: "#F1F5F9", text: "#334155", icon: "🏠" },
+  ENTERTAINMENT:{ bg: "#FFF7ED", text: "#C2410C", icon: "🎬" },
+  DEFAULT:      { bg: "#EEF2FF", text: "#4338CA", icon: "🏷️" },
+};
+
+// NEW: turns "ELECTRICITY" -> "Electricity", "NET_BANKING"-style category names with
+// underscores -> "Net Banking"
+function formatCategoryLabel(category) {
+  if (!category) return "";
+  return category
+    .toLowerCase()
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
 function formatDate(dateStr) {
   if (!dateStr) return "—";
   const d = new Date(dateStr);
@@ -368,6 +394,15 @@ export default function Expenses() {
                 <tbody>
                   {expenses.map((expense, index) => {
                     const method = METHOD_STYLES[expense.paymentMethod] || METHOD_STYLES.OTHER;
+
+                    // FIX: API returns `category` as a plain string (e.g. "FOOD"),
+                    // not an object — so `expense.category?.name` was always undefined.
+                    // Read the raw string value, and use it to look up a badge style.
+                    const categoryValue = expense.categoryName || expense.category || null;
+                    const categoryStyle = categoryValue
+                      ? (CATEGORY_STYLES[categoryValue.toUpperCase?.()] || CATEGORY_STYLES.DEFAULT)
+                      : null;
+
                     return (
                       <tr key={expense.id} className="exp-row" style={{ borderBottom: index < expenses.length - 1 ? "1px solid #F1F5F9" : "none" }}>
                         <td style={{ padding: "14px 16px", fontSize: 13, color: "#CBD5E1", fontWeight: 600 }}>
@@ -383,11 +418,21 @@ export default function Expenses() {
                           </span>
                         </td>
                         <td style={{ padding: "14px 16px" }}>
-                          {expense.categoryName || expense.category?.name ? (
-                            <span style={{ background: "#EEF2FF", color: "#4338CA", borderRadius: 7, padding: "4px 10px", fontSize: 12, fontWeight: 600 }}>
-                              {expense.categoryName || expense.category?.name}
+                          {categoryValue ? (
+                            <span style={{
+                              background: categoryStyle.bg,
+                              color: categoryStyle.text,
+                              borderRadius: 7,
+                              padding: "4px 10px",
+                              fontSize: 12,
+                              fontWeight: 600,
+                              whiteSpace: "nowrap",
+                            }}>
+                              {categoryStyle.icon} {formatCategoryLabel(categoryValue)}
                             </span>
-                          ) : <span style={{ color: "#CBD5E1", fontSize: 13 }}>—</span>}
+                          ) : (
+                            <span style={{ color: "#CBD5E1", fontSize: 13 }}>—</span>
+                          )}
                         </td>
                         <td style={{ padding: "14px 16px" }}>
                           {expense.paymentMethod ? (
