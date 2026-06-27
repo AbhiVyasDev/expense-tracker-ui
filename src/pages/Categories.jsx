@@ -38,20 +38,43 @@ function Categories() {
   const [search, setSearch] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
 
-  useEffect(() => { loadCategories(); }, []);
+  // Pagination configuration
+  const ROWS_PER_PAGE_OPTIONS = [10, 25, 50];
+  const [page, setPage] = useState(0);
+  const [size, setSize] = useState(10);
+  const [totalElements, setTotalElements] = useState(0);
+
+  useEffect(() => { 
+    loadCategories(); 
+  }, [page, size]);
 
   const loadCategories = async () => {
     setLoading(true);
     setPageError("");
     try {
-      const data = await categoryService.getAllCategories();
-      setCategories(Array.isArray(data) ? data : data.data ?? []);
+      const res = await categoryService.getAllCategories(page, size);
+      
+      // Target Spring Boot's Page payload wrapped inside your ApiResponse structure
+      const pageData = res?.data || res; 
+      const content = pageData?.content ?? (Array.isArray(pageData) ? pageData : []);
+      
+      setCategories(content);
+      setTotalElements(pageData?.totalElements ?? content.length);
     } catch (err) {
       console.error(err);
       setPageError("Failed to load categories. Please try again.");
     } finally {
       setLoading(false);
     }
+  };
+
+  const totalPages = Math.max(1, Math.ceil(totalElements / size));
+  const rangeStart = totalElements === 0 ? 0 : page * size + 1;
+  const rangeEnd = Math.min((page + 1) * size, totalElements);
+
+  const handleSizeChange = (e) => {
+    setSize(Number(e.target.value));
+    setPage(0); // Reset page view indexing on resizing adjustments
   };
 
   const handleChange = (e) => {
@@ -83,6 +106,7 @@ function Categories() {
     setFormError("");
   };
 
+  // Local client filtering rules applied directly to current visible chunk allocations
   const filtered = categories.filter(c =>
     c.name?.toLowerCase().includes(search.toLowerCase()) ||
     c.description?.toLowerCase().includes(search.toLowerCase())
@@ -103,6 +127,9 @@ function Categories() {
         @keyframes slideIn { from { opacity: 0; transform: scale(0.96) translateY(12px); } to { opacity: 1; transform: scale(1) translateY(0); } }
         .cat-row:hover { background: #F8FAFC !important; }
         .cat-row { transition: background 0.15s; }
+        .page-nav-btn:hover:not(:disabled) { background: #EEF2FF !important; color: #4338CA !important; border-color: #C7D2FE !important; }
+        .page-nav-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .rows-select:focus { border-color: #6366F1 !important; }
       `}</style>
 
       <div style={{ fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif", padding: "36px 40px", maxWidth: 960, margin: "0 auto" }}>
@@ -122,7 +149,7 @@ function Categories() {
               </h1>
             </div>
             <p style={{ fontSize: 14, color: "#64748B", margin: "0 0 0 52px" }}>
-              {loading ? "Loading…" : `${categories.length} ${categories.length === 1 ? "category" : "categories"} total`}
+              {loading ? "Loading…" : `${totalElements} ${totalElements === 1 ? "category" : "categories"} total`}
             </p>
           </div>
 
@@ -141,7 +168,7 @@ function Categories() {
           </button>
         </div>
 
-        {/* ── Success toast ── */}
+        {/* ── Success Toast ── */}
         {successMsg && (
           <div style={{ display: "flex", alignItems: "center", gap: 10, background: "#F0FDF4", border: "1.5px solid #BBF7D0", borderRadius: 10, padding: "12px 16px", marginBottom: 20, animation: "fadeIn 0.3s ease", color: "#15803D", fontSize: 14, fontWeight: 500 }}>
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -152,16 +179,16 @@ function Categories() {
           </div>
         )}
 
-        {/* ── Error banner ── */}
+        {/* ── Error Banner ── */}
         {pageError && (
           <div style={{ background: "#FFF1F2", border: "1px solid #FECDD3", borderRadius: 10, padding: "12px 16px", marginBottom: 20, color: "#BE123C", fontSize: 14 }}>
             {pageError}
           </div>
         )}
 
-        {/* ── Search bar ── */}
+        {/* ── Search Bar ── */}
         {!loading && categories.length > 0 && (
-          <div style={{ position: "relative", marginBottom: 20 }}>
+          <div style={{ position: "relative", marginBottom: 8 }}>
             <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", display: "flex" }}>
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                 <circle cx="7" cy="7" r="4.5" stroke="#94A3B8" strokeWidth="1.5" />
@@ -170,7 +197,7 @@ function Categories() {
             </span>
             <input
               type="text"
-              placeholder="Search categories…"
+              placeholder="Search this page…"
               value={search}
               onChange={e => setSearch(e.target.value)}
               style={{ ...inputBase, paddingLeft: 40, background: "#F8FAFC" }}
@@ -186,14 +213,18 @@ function Categories() {
             )}
           </div>
         )}
+        {!loading && categories.length > 0 && search && (
+          <p style={{ fontSize: 12, color: "#94A3B8", margin: "0 0 16px", paddingLeft: 2 }}>
+            Searching only matches categories on the current page.
+          </p>
+        )}
 
-        {/* ── States ── */}
+        {/* ── Dynamic Layout States ── */}
         {loading ? (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: 220, gap: 14 }}>
             <div style={{ width: 36, height: 36, border: "3px solid #E2E8F0", borderTop: "3px solid #6366F1", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
             <p style={{ color: "#94A3B8", fontSize: 14, margin: 0 }}>Loading categories…</p>
           </div>
-
         ) : filtered.length === 0 ? (
           <div style={{ textAlign: "center", padding: "72px 24px", background: "#F8FAFC", borderRadius: 16, border: "1.5px dashed #CBD5E1" }}>
             <div style={{ width: 56, height: 56, background: "#EEF2FF", borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px", fontSize: 24 }}>
@@ -203,7 +234,7 @@ function Categories() {
               {search ? "No results found" : "No categories yet"}
             </p>
             <p style={{ fontSize: 14, color: "#94A3B8", margin: "0 0 20px" }}>
-              {search ? `No categories match "${search}".` : "Create your first category to start organising expenses."}
+              {search ? `No categories on this page match "${search}".` : "Create your first category to start organising expenses."}
             </p>
             {!search && (
               <button onClick={() => setShowModal(true)} style={{ background: "#6366F1", color: "#fff", border: "none", borderRadius: 9, padding: "10px 20px", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
@@ -211,55 +242,103 @@ function Categories() {
               </button>
             )}
           </div>
-
         ) : (
-          /* ── Table ── */
-          <div style={{ background: "#fff", borderRadius: 14, border: "1.5px solid #E2E8F0", overflow: "hidden", boxShadow: "0 1px 6px rgba(0,0,0,0.05)", animation: "fadeIn 0.3s ease" }}>
-            {/* Stats strip */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 20px", background: "#F8FAFC", borderBottom: "1.5px solid #E2E8F0" }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: "#94A3B8", letterSpacing: "0.6px", textTransform: "uppercase" }}>
-                {filtered.length} {filtered.length === 1 ? "result" : "results"}{search ? ` for "${search}"` : ""}
-              </span>
+          <>
+            {/* ── Category Data Table ── */}
+            <div style={{ background: "#fff", borderRadius: 14, border: "1.5px solid #E2E8F0", overflow: "hidden", boxShadow: "0 1px 6px rgba(0,0,0,0.05)", animation: "fadeIn 0.3s ease" }}>
+              {search && (
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 20px", background: "#F8FAFC", borderBottom: "1.5px solid #E2E8F0" }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: "#94A3B8", letterSpacing: "0.6px", textTransform: "uppercase" }}>
+                    {filtered.length} {filtered.length === 1 ? "result" : "results"} on this page
+                  </span>
+                </div>
+              )}
+
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr style={{ borderBottom: "1.5px solid #E2E8F0" }}>
+                    {["#", "Name", "Description"].map((h, i) => (
+                      <th key={h} style={{ padding: "12px 20px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#94A3B8", letterSpacing: "1px", textTransform: "uppercase", width: i === 0 ? 48 : "auto" }}>
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((category, index) => {
+                    const color = TAG_COLORS[index % TAG_COLORS.length];
+                    const icon = getCategoryIcon(category.name);
+                    return (
+                      <tr key={category.id || index} className="cat-row" style={{ borderBottom: index < filtered.length - 1 ? "1px solid #F1F5F9" : "none" }}>
+                        <td style={{ padding: "14px 20px", fontSize: 13, color: "#CBD5E1", fontWeight: 600 }}>
+                          {String(page * size + index + 1).padStart(2, "0")}
+                        </td>
+                        <td style={{ padding: "14px 20px" }}>
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 8, background: color.bg, color: color.text, borderRadius: 8, padding: "5px 12px", fontSize: 13, fontWeight: 700 }}>
+                            <span style={{ fontSize: 14 }}>{icon}</span>
+                            {category.name}
+                          </span>
+                        </td>
+                        <td style={{ padding: "14px 20px", fontSize: 14, color: category.description ? "#374151" : "#CBD5E1", maxWidth: 400 }}>
+                          {category.description || <span style={{ fontStyle: "italic" }}>No description</span>}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
 
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr style={{ borderBottom: "1.5px solid #E2E8F0" }}>
-                  {["#", "Name", "Description"].map((h, i) => (
-                    <th key={h} style={{ padding: "12px 20px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#94A3B8", letterSpacing: "1px", textTransform: "uppercase", width: i === 0 ? 48 : "auto" }}>
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((category, index) => {
-                  const color = TAG_COLORS[index % TAG_COLORS.length];
-                  const icon = getCategoryIcon(category.name);
-                  return (
-                    <tr key={category.id} className="cat-row" style={{ borderBottom: index < filtered.length - 1 ? "1px solid #F1F5F9" : "none" }}>
-                      <td style={{ padding: "14px 20px", fontSize: 13, color: "#CBD5E1", fontWeight: 600 }}>
-                        {String(index + 1).padStart(2, "0")}
-                      </td>
-                      <td style={{ padding: "14px 20px" }}>
-                        <span style={{ display: "inline-flex", alignItems: "center", gap: 8, background: color.bg, color: color.text, borderRadius: 8, padding: "5px 12px", fontSize: 13, fontWeight: 700 }}>
-                          <span style={{ fontSize: 14 }}>{icon}</span>
-                          {category.name}
-                        </span>
-                      </td>
-                      <td style={{ padding: "14px 20px", fontSize: 14, color: category.description ? "#374151" : "#CBD5E1", maxWidth: 400 }}>
-                        {category.description || <span style={{ fontStyle: "italic" }}>No description</span>}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+            {/* ── Pagination Footer Controls ── */}
+            {!search && totalElements > 0 && (
+              <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 28, marginTop: 18, flexWrap: "wrap" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{ fontSize: 13, color: "#64748B" }}>Rows per page:</span>
+                  <select
+                    className="rows-select"
+                    value={size}
+                    onChange={handleSizeChange}
+                    style={{ border: "1.5px solid #E2E8F0", borderRadius: 8, padding: "6px 10px", fontSize: 13, color: "#374151", background: "#fff", outline: "none", cursor: "pointer", fontFamily: "'Inter', sans-serif" }}
+                  >
+                    {ROWS_PER_PAGE_OPTIONS.map(n => <option key={n} value={n}>{n}</option>)}
+                  </select>
+                </div>
+
+                <span style={{ fontSize: 13, color: "#64748B", fontWeight: 500 }}>
+                  {rangeStart}–{rangeEnd} of {totalElements}
+                </span>
+
+                <div style={{ display: "flex", gap: 6 }}>
+                  <button
+                    className="page-nav-btn"
+                    onClick={() => setPage(p => p - 1)}
+                    disabled={page === 0}
+                    aria-label="Previous page"
+                    style={{ width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", background: "#F8FAFC", color: "#374151", border: "1.5px solid #E2E8F0", borderRadius: 8, cursor: "pointer" }}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                      <path d="M10 3.5L5.5 8l4.5 4.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                  <button
+                    className="page-nav-btn"
+                    onClick={() => setPage(p => p + 1)}
+                    disabled={page >= totalPages - 1}
+                    aria-label="Next page"
+                    style={{ width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", background: "#F8FAFC", color: "#374151", border: "1.5px solid #E2E8F0", borderRadius: 8, cursor: "pointer" }}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                      <path d="M6 3.5L10.5 8 6 12.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
 
-      {/* ── Modal ── */}
+      {/* ── Modal Creation Window ── */}
       {showModal && (
         <div
           onClick={e => { if (e.target === e.currentTarget) closeModal(); }}
@@ -267,7 +346,6 @@ function Categories() {
         >
           <div style={{ background: "#fff", borderRadius: 18, padding: "32px", width: "100%", maxWidth: 460, boxShadow: "0 24px 64px rgba(0,0,0,0.2)", animation: "slideIn 0.25s ease", fontFamily: "'Inter', sans-serif" }}>
 
-            {/* Modal header */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 28 }}>
               <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
                 <div style={{ width: 44, height: 44, background: "#EEF2FF", borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>
@@ -286,8 +364,6 @@ function Categories() {
             </div>
 
             <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-
-              {/* Name */}
               <div>
                 <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}>
                   Category name <span style={{ color: "#EF4444" }}>*</span>
@@ -301,7 +377,6 @@ function Categories() {
                 />
               </div>
 
-              {/* Description */}
               <div>
                 <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}>
                   Description <span style={{ fontSize: 12, color: "#94A3B8", fontWeight: 400 }}>(optional)</span>
@@ -315,7 +390,6 @@ function Categories() {
                 />
               </div>
 
-              {/* Form error */}
               {formError && (
                 <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#FFF1F2", border: "1px solid #FECDD3", borderRadius: 8, padding: "10px 14px", color: "#BE123C", fontSize: 13 }}>
                   <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
@@ -326,10 +400,8 @@ function Categories() {
                 </div>
               )}
 
-              {/* Divider */}
               <div style={{ height: 1, background: "#F1F5F9", margin: "2px 0" }} />
 
-              {/* Actions */}
               <div style={{ display: "flex", gap: 10 }}>
                 <button type="button" onClick={closeModal}
                   style={{ flex: 1, padding: "12px", background: "#F8FAFC", color: "#374151", border: "1.5px solid #E2E8F0", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer" }}
@@ -342,8 +414,6 @@ function Categories() {
                   style={{ flex: 1, padding: "12px", background: submitting ? "#A5B4FC" : "#6366F1", color: "#fff", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: submitting ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, boxShadow: submitting ? "none" : "0 2px 8px rgba(99,102,241,0.3)" }}
                   onMouseEnter={e => { if (!submitting) e.currentTarget.style.background = "#4F46E5"; }}
                   onMouseLeave={e => { if (!submitting) e.currentTarget.style.background = "#6366F1"; }}
-                  onMouseDown={e => { if (!submitting) e.currentTarget.style.transform = "scale(0.97)"; }}
-                  onMouseUp={e => e.currentTarget.style.transform = "scale(1)"}
                 >
                   {submitting ? (
                     <>
@@ -360,7 +430,6 @@ function Categories() {
                   )}
                 </button>
               </div>
-
             </form>
           </div>
         </div>

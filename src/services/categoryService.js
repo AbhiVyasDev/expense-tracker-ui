@@ -1,7 +1,9 @@
 import api from "../api/axios";
 
-const getAllCategories = async () => {
-  const response = await api.get("/categories/");
+const getAllCategories = async (page = 0, size = 10, sortBy = "id", direction = "asc") => {
+  const response = await api.get("/categories/", {
+    params: { page, size, sortBy, direction },
+  });
   return response.data;
 };
 

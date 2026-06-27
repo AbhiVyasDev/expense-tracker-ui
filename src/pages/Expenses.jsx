@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import MainLayout from "../layouts/MainLayout";
 import { getExpenses, createExpense, filterExpenses } from "../services/expenseService";
 import categoryService from "../services/categoryService";
+import { downloadExcelReport } from "../services/reportService";
 
 const PAYMENT_METHODS = ["CASH", "CREDIT_CARD", "DEBIT_CARD", "UPI", "NET_BANKING", "OTHER"];
 
@@ -13,32 +14,6 @@ const METHOD_STYLES = {
   NET_BANKING:  { bg: "#FFF7ED", text: "#C2410C", label: "🏦 Net Banking" },
   OTHER:        { bg: "#F8FAFC", text: "#475569", label: "💰 Other" },
 };
-
-// NEW: category -> badge style + icon. "OTHER"/unknown values fall back to DEFAULT.
-const CATEGORY_STYLES = {
-  FOOD:         { bg: "#FEF3C7", text: "#92400E", icon: "🍔" },
-  ELECTRICITY:  { bg: "#FEF9C3", text: "#854D0E", icon: "⚡" },
-  TRAVEL:       { bg: "#E0F2FE", text: "#0369A1", icon: "✈️" },
-  TRANSPORT:    { bg: "#E0F2FE", text: "#0369A1", icon: "🚌" },
-  EDUCATION:    { bg: "#EDE9FE", text: "#6D28D9", icon: "🎓" },
-  HEALTH:       { bg: "#FEE2E2", text: "#B91C1C", icon: "🩺" },
-  MEDICAL:      { bg: "#FEE2E2", text: "#B91C1C", icon: "🩺" },
-  SHOPPING:     { bg: "#FCE7F3", text: "#BE185D", icon: "🛍️" },
-  RENT:         { bg: "#F1F5F9", text: "#334155", icon: "🏠" },
-  ENTERTAINMENT:{ bg: "#FFF7ED", text: "#C2410C", icon: "🎬" },
-  DEFAULT:      { bg: "#EEF2FF", text: "#4338CA", icon: "🏷️" },
-};
-
-// NEW: turns "ELECTRICITY" -> "Electricity", "NET_BANKING"-style category names with
-// underscores -> "Net Banking"
-function formatCategoryLabel(category) {
-  if (!category) return "";
-  return category
-    .toLowerCase()
-    .split("_")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
-}
 
 function formatDate(dateStr) {
   if (!dateStr) return "—";
@@ -83,6 +58,9 @@ export default function Expenses() {
   const [formData, setFormData]     = useState({
     title: "", amount: "", expenseDate: "", categoryId: "", paymentMethod: "", notes: "",
   });
+
+  // Export report
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     loadCategories();
@@ -173,6 +151,19 @@ export default function Expenses() {
     setFormError("");
   };
 
+  const handleExport = async () => {
+    setExporting(true); setPageError("");
+    try {
+      const stamp = new Date().toISOString().slice(0, 10);
+      await downloadExcelReport(`expenses-${stamp}.xlsx`);
+    } catch (e) {
+      console.error(e);
+      setPageError("Failed to export report. Please try again.");
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const totalAmount = expenses.reduce((s, e) => s + (parseFloat(e.amount) || 0), 0);
   const activeFilterCount = Object.values(activeFilters).filter(Boolean).length;
 
@@ -186,6 +177,8 @@ export default function Expenses() {
         .exp-row { transition: background 0.15s; cursor: default; }
         .page-btn:hover:not(:disabled) { background: #EEF2FF !important; color: #4338CA !important; }
         .page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .export-btn:hover:not(:disabled) { background: #F1F5F9 !important; }
+        .export-btn:disabled { opacity: 0.6; cursor: not-allowed; }
       `}</style>
 
       <div style={{ fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif", padding: "36px 40px", maxWidth: 1100, margin: "0 auto" }}>
@@ -208,6 +201,24 @@ export default function Expenses() {
           </div>
 
           <div style={{ display: "flex", gap: 10 }}>
+            {/* Export Report button */}
+            <button
+              className="export-btn"
+              onClick={handleExport}
+              disabled={exporting}
+              style={{ display: "flex", alignItems: "center", gap: 8, background: "#F8FAFC", color: "#374151", border: "1.5px solid #E2E8F0", borderRadius: 10, padding: "10px 16px", fontSize: 14, fontWeight: 600, cursor: exporting ? "not-allowed" : "pointer" }}
+            >
+              {exporting ? (
+                <div style={{ width: 14, height: 14, border: "2px solid #CBD5E1", borderTop: "2px solid #6366F1", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+              ) : (
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <path d="M8 2v8m0 0L5 7m3 3l3-3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M3 11v2.5A1.5 1.5 0 0 0 4.5 15h7A1.5 1.5 0 0 0 13 13.5V11" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              )}
+              {exporting ? "Exporting…" : "Export Report"}
+            </button>
+
             {/* Filter button */}
             <button
               onClick={() => setShowFilter(!showFilter)}
@@ -394,15 +405,6 @@ export default function Expenses() {
                 <tbody>
                   {expenses.map((expense, index) => {
                     const method = METHOD_STYLES[expense.paymentMethod] || METHOD_STYLES.OTHER;
-
-                    // FIX: API returns `category` as a plain string (e.g. "FOOD"),
-                    // not an object — so `expense.category?.name` was always undefined.
-                    // Read the raw string value, and use it to look up a badge style.
-                    const categoryValue = expense.categoryName || expense.category || null;
-                    const categoryStyle = categoryValue
-                      ? (CATEGORY_STYLES[categoryValue.toUpperCase?.()] || CATEGORY_STYLES.DEFAULT)
-                      : null;
-
                     return (
                       <tr key={expense.id} className="exp-row" style={{ borderBottom: index < expenses.length - 1 ? "1px solid #F1F5F9" : "none" }}>
                         <td style={{ padding: "14px 16px", fontSize: 13, color: "#CBD5E1", fontWeight: 600 }}>
@@ -418,21 +420,18 @@ export default function Expenses() {
                           </span>
                         </td>
                         <td style={{ padding: "14px 16px" }}>
-                          {categoryValue ? (
-                            <span style={{
-                              background: categoryStyle.bg,
-                              color: categoryStyle.text,
-                              borderRadius: 7,
-                              padding: "4px 10px",
-                              fontSize: 12,
-                              fontWeight: 600,
-                              whiteSpace: "nowrap",
-                            }}>
-                              {categoryStyle.icon} {formatCategoryLabel(categoryValue)}
+                          {expense.categoryName || expense.category?.name ? (
+                            <span style={{  background: "#EEF2FF",
+        color: "#4338CA",
+        borderRadius: 7,
+        padding: "4px 10px",
+        fontSize: 12,
+        fontWeight: 600, }}>
+                              {expense.categoryName || expense.category?.name}
                             </span>
                           ) : (
-                            <span style={{ color: "#CBD5E1", fontSize: 13 }}>—</span>
-                          )}
+    <span style={{ color: "#CBD5E1", fontSize: 13 }}>—</span>
+)}
                         </td>
                         <td style={{ padding: "14px 16px" }}>
                           {expense.paymentMethod ? (
